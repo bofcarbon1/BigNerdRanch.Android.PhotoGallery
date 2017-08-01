@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme"  parent="Theme.AppCompat">
+        <item name="colorPrimary">@color/light_sea_green_tint</item>
+        <item name="colorPrimaryDark">@color/sea_green</item>
+        <item name="colorAccent">@color/gray</item>
+        <item name="android:colorBackground">@color/gray</item>
+    </style>
+</resources>
