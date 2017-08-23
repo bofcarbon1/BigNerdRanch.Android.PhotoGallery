@@ -6,7 +6,7 @@
     <WebView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:id="@+id/webView"
+        android:id="@+id/fragment_photo_page_webView"
         android:layout_alignParentBottom="true"
         android:layout_alignParentTop="true">
     </WebView>
@@ -14,7 +14,7 @@
     <ProgressBar
         android:layout_width="fill_parent"
         android:layout_height="wrap_content"
-        android:id="@+id/progressBar"
+        android:id="@+id/fragment_photo_page_progressBar"
         android:layout_alignParentBottom="true"
         android:visibility="invisible"
         style="@android:style/Widget.ProgressBar.Horizontal"/>
@@ -24,6 +24,6 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_margin="5dp"
-        android:layout_above="@id/progressBar"/>
+        android:layout_above="@id/fragment_photo_page_progressBar"/>
 
 </RelativeLayout>

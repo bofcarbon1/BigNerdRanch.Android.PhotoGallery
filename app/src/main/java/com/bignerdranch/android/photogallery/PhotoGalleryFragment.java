@@ -1,5 +1,6 @@
 package com.bignerdranch.android.photogallery;
 
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
@@ -7,14 +8,21 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.v4.app.Fragment;
+import android.support.v4.view.MenuItemCompat;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.RecyclerView.OnScrollListener;
+import android.support.v7.widget.SearchView;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
+import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.RelativeLayout;
@@ -29,7 +37,7 @@ import java.util.List;
 
 import static android.content.ContentValues.TAG;
 
-public class PhotoGalleryFragment extends Fragment {
+public class PhotoGalleryFragment extends VisibleFragment {
 
     private static final String TAB = "PhotoGalleryFragment";
     private RecyclerView mPhotoRecyclerView;
@@ -42,16 +50,21 @@ public class PhotoGalleryFragment extends Fragment {
     //Track scrolling direction
     private static int firstVisibleInListview;
 
-    private class PhotoHolder extends RecyclerView.ViewHolder {
+    private class PhotoHolder extends RecyclerView.ViewHolder
+        implements View.OnClickListener {
 
         //Ch 24 private TextView mTitleTextView;
         private ImageView mItemImageView;
+        //Ch 28 Web
+        private GalleryItem mGalleryItem;
 
         public PhotoHolder(View itemView) {
             super(itemView);
             //CH 24 - mTitleTextView = (TextView) itemView;
             mItemImageView = (ImageView) itemView
                     .findViewById(R.id.fragment_photo_gallery_image_view);
+            //Ch 28 Web
+            itemView.setOnClickListener(this);
         }
 
         //public void bindGalleryItem(GalleryItem item) {
@@ -65,20 +78,45 @@ public class PhotoGalleryFragment extends Fragment {
 
         //Use Picasso to handle image loading
         public void bindGalleryItsm(GalleryItem galleryItem) {
+            //Ch 28 Web link
+            mGalleryItem = galleryItem;
             Picasso.with(getActivity())
                     .load(galleryItem.getUrl())
                     .placeholder(R.drawable.monkey)
                     .into(mItemImageView);
         }
 
+        @Override
+        public void onClick(View v) {
+            //Ch 28 WebViews now using newly created activity
+            //Intent i = new Intent(Intent.ACTION_VIEW, mGalleryItem.getPhotoPageUri());
+            Intent i = PhotoPageActivity.newIntent(getActivity(), mGalleryItem.getPhotoPageUri());
+            startActivity(i);
+        }
+
     }
 
     private class FetchItemsTask extends AsyncTask<Void, Void, List<GalleryItem>> {
 
+        //Start 25 Search feature persist
+        private String mQuery;
+
+        public FetchItemsTask(String query) {
+            mQuery = query;
+        }
         //Start an asyun task using a background threa to get urls and
         @Override
         protected List<GalleryItem> doInBackground(Void... params) {
-            return new FlickrFetcher().fetchItems(Integer.toString(mPage));
+            //Ch 25 add search feature
+            //return new FlickrFetcher().fetchItems(Integer.toString(mPage));
+            //String query = "robot"; // just for test
+
+            if(mQuery == null) {
+                return new FlickrFetcher().fetchRecentPhotos();
+            }
+            else {
+                return new FlickrFetcher().searchPhotos(mQuery);
+            }
         }
 
         @Override
@@ -89,6 +127,7 @@ public class PhotoGalleryFragment extends Fragment {
     }
 
     public static PhotoGalleryFragment newInstance() {
+
         return new PhotoGalleryFragment();
     }
 
@@ -96,8 +135,16 @@ public class PhotoGalleryFragment extends Fragment {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setRetainInstance(true);
+        //Ch 25 add search feature in menu
+        setHasOptionsMenu(true);
         //Start AsynTask (fetch items from Flickr)
-        new FetchItemsTask().execute();
+        //Ch25 add search feature
+        //new FetchItemsTask().execute();
+        updateItems();
+
+        //Ch26 Intents
+        //Intent i = PollService.newIntent(getActivity());
+        //getActivity().startService(i);
 
         //Ch 24 thumbnail photo download background thread
         //with main thread response handler combined
@@ -127,6 +174,83 @@ public class PhotoGalleryFragment extends Fragment {
         //Picasso eliminated need for ThumbnailDownloader
         //mThumbnailDownloader.quit();
         Log.i(TAG, "Background thread destroyed: " );
+    }
+
+    //Ch25 Added search feature
+    @Override
+    public void onCreateOptionsMenu(Menu menu, MenuInflater menuInflater) {
+        super.onCreateOptionsMenu(menu, menuInflater);
+        menuInflater.inflate(R.menu.fragment_photo_gallery, menu);
+
+        final MenuItem searchItem = menu.findItem(R.id.menu_itesm_search);
+
+        final SearchView searchView = (SearchView) searchItem.getActionView();
+
+        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            @Override
+            public boolean onQueryTextSubmit(String s) {
+                Log.d(TAG, "QueryTextSubmit: " + s);
+                //Ch25 search feature persist search text
+                QueryPreferences.setStoredQuery(getActivity(), s);
+                updateItems();
+                //Ch25 Challenge 1 (This one was a bust)
+                //the challenge seems to be aimed at deprecated code techniques.
+                //Besides which making these changes would not make the photo
+                //loading look faster
+                searchView.setIconified(true);
+                //searchItem.collapseActionView();
+
+                return true;
+            }
+
+            @Override
+            public boolean onQueryTextChange(String s) {
+                Log.d(TAG, "QueryTextChange: " + s);
+                return false;
+            }
+        });
+
+        searchView.setOnSearchClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+            String query = QueryPreferences.getStoredQuery(getActivity());
+            searchView.setQuery(query, false);
+            }
+        });
+
+        MenuItem toggleItem = menu.findItem(R.id.menu_itesm_toggle_polling);
+        if (PollService.isServiceAlarmOn(getActivity())) {
+            toggleItem.setTitle(R.string.stop_polling);
+        }
+        else {
+            toggleItem.setTitle(R.string.start_polling);
+        }
+
+    }
+
+    //Ch25 Added search feature persist search string using shared preference
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            case R.id.menu_itesm_clear:
+                QueryPreferences.setStoredQuery(getActivity(), null);
+                updateItems();
+                return true;
+            case R.id.menu_itesm_toggle_polling:
+                boolean shouldStartAlarm = !PollService.isServiceAlarmOn(getActivity());
+                PollService.setServiceAlarm(getActivity(), shouldStartAlarm);
+                //Tell PhotogalleryActivity to update its toolbar options
+                getActivity().invalidateOptionsMenu();
+                return true;
+            default:
+                return super.onOptionsItemSelected(item);
+        }
+    }
+
+    //Ch25 Added search feature
+    private void updateItems() {
+        String query = QueryPreferences.getStoredQuery(getActivity());
+        new FetchItemsTask(query).execute();
     }
 
     //Clean up view and attached message queue
@@ -217,6 +341,7 @@ public class PhotoGalleryFragment extends Fragment {
             //Picasso replaces the old adapter bind method to the class container object
             //photoHolder.bindDrawable(placeholder);
             photoHolder.bindGalleryItsm(galleryItem);
+
             //mThumbnailDownloader.queueThumbnail(photoHolder, galleryItem.getUrl());
         }
 
